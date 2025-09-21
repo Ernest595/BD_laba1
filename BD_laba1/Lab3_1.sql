@@ -35,6 +35,7 @@ create type enumeration_state as enum ('best','good','normal','old', 'lost');
 create type enumeration_status as enum ('available','issued','booked');
 
 
+
 create table public.book_instance (
 id INT primary key,
 information_book INT references public.book(id),
