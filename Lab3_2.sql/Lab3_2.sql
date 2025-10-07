@@ -270,3 +270,45 @@ update public.book_instance
 set status_book = 'available' 
 where information_book = 1
 and status_book  = 'reserved';
+
+
+
+--13
+WITH 
+overdue_check AS (
+    SELECT COUNT(*) as overdue_count 
+    FROM public.issuance i
+    JOIN public.reader r ON i.reader_card_number = r.reader_card_number
+    WHERE r.reader_card_number = 2004
+      AND i.date_actual_return IS NULL 
+      AND i.expected_return_date < CURRENT_DATE
+),
+
+booking_check AS (
+    SELECT COUNT(*) as active_booking_count
+    FROM public.booking b
+    JOIN public.book_instance bi ON b.id_book = bi.information_book 
+    WHERE bi.id = 6007
+      AND b.reader_card != 2004
+      AND b.data_time >= CURRENT_TIMESTAMP - INTERVAL '5 days'
+)
+insert into public.issuance(reader_card_number, book_id, data_time, expected_return_date, date_actual_return)
+select 
+	2004 as reader_card_number,
+    6007 as book_id,
+	CURRENT_TIMESTAMP(0) as data_time,
+    CURRENT_DATE + INTERVAL '14 days' as expected_return_date,
+    NULL as date_actual_return
+FROM overdue_check, booking_check
+WHERE overdue_check.overdue_count = 0 
+  AND booking_check.active_booking_count = 0;
+
+UPDATE public.book_instance
+SET status_book = 'issued'
+WHERE id = 6007
+AND EXISTS (
+    SELECT 1 FROM public.issuance 
+    WHERE reader_card_number = 2004
+    AND book_id = 6007
+    AND date_actual_return IS NULL
+);
