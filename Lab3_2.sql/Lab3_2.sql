@@ -1,5 +1,6 @@
 
 
+
 insert into public.author (last_name, first_name) 
 values 
 	('Булгаков', 'Михаил'),
@@ -210,5 +211,62 @@ WHERE i.date_actual_return IS null
 SELECT * FROM public.overdue_books_view;
 
 
-	
-	
+
+--10
+WITH overdue_check AS (
+    SELECT COUNT(*) as overdue_count 
+    FROM public.issuance i
+    JOIN public.reader r ON i.reader_card_number = r.reader_card_number
+    WHERE r.reader_card_number = 2004
+      AND i.date_actual_return IS NULL 
+      AND i.expected_return_date < CURRENT_DATE
+)
+insert into public.issuance(reader_card_number, book_id, data_time, expected_return_date, date_actual_return)
+select 
+	2004 as reader_card_number,
+    6005 as book_id,
+    CURRENT_TIMESTAMP(0) as data_time,
+    CURRENT_DATE + INTERVAL '14 days' as expected_return_date,
+    NULL as date_actual_return
+FROM overdue_check
+WHERE overdue_count = 0; 
+
+UPDATE public.book_instance
+SET status_book = 'issued'
+WHERE id = 6005
+AND EXISTS (
+    SELECT 1 FROM public.issuance 
+    WHERE reader_card_number = 2004
+    AND book_id = 5005 
+    AND date_actual_return IS NULL
+);
+
+
+
+--11
+insert into public.booking(reader_card, id_book, min_level, data_time)
+select  2001, 1, 'best', CURRENT_TIMESTAMP(0)
+WHERE EXISTS (
+    SELECT 1 FROM public.book_instance 
+    WHERE information_book = 1 
+    AND state_book >= 'best' 
+    AND status_book = 'available'
+);
+
+update public.book_instance    
+set status_book  = 'reserved' 
+where information_book = 1
+and state_book >= 'best'
+and status_book  = 'available';
+);
+
+
+
+--12 
+delete from  public.booking 
+where reader_card = 2001 AND id_book = 1;
+
+update public.book_instance 
+set status_book = 'available' 
+where information_book = 1
+and status_book  = 'reserved';
