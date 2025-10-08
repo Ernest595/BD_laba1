@@ -61,3 +61,9 @@ data_time TIMESTAMP(2) not null default current_TIMESTAMP(0)
 );
 
 
+CREATE TABLE public.logs (
+    log_id SERIAL PRIMARY KEY,
+    log_datetime TIMESTAMP(0) NOT NULL DEFAULT CURRENT_TIMESTAMP(0),
+    log_context VARCHAR(50) NOT NULL,
+    log_content TEXT NOT NULL
+);
