@@ -312,3 +312,121 @@ AND EXISTS (
     AND book_id = 6007
     AND date_actual_return IS NULL
 );
+
+
+
+--14
+CREATE OR REPLACE FUNCTION get_book_locations(
+    p_book_id INTEGER DEFAULT NULL,
+    p_book_name VARCHAR DEFAULT NULL  
+)
+RETURNS TABLE (
+    book_id INTEGER,
+    book_name VARCHAR,                
+    author_last_name VARCHAR,           
+    author_first_name VARCHAR,        
+    publishing_house VARCHAR,         
+    publication_year INTEGER,
+    instance_id INTEGER,
+    book_state book_state_type,               
+    book_status book_status_type,              
+    book_location VARCHAR,
+    state_priority INTEGER
+) AS $$
+begin
+	
+	IF p_book_id IS NULL AND p_book_name IS NULL THEN
+        RAISE EXCEPTION 'Необходимо указать ID или название книги';
+    END IF;
+	
+	  RETURN QUERY
+    SELECT 
+        b.id AS book_id,
+        b.book_name,
+        a.last_name AS author_last_name,
+    	a.first_name AS author_first_name,
+        ph.house_name AS publishing_house,
+        b.publication_year,
+        bi.id AS instance_id,
+        bi.book_state,
+        bi.book_status,
+        bi.book_location,
+        CASE 
+            WHEN bi.book_state = 'best' 	THEN 1
+            WHEN bi.book_state = 'good' 	THEN 2
+            WHEN bi.book_state = 'normal' 	THEN 3
+            WHEN bi.book_state = 'old' 		THEN 4
+            ELSE 5
+        END AS state_priority
+     FROM public.book b
+    INNER JOIN public.author a ON b.author = a.id
+    INNER JOIN public.publishing_house ph ON b.house = ph.id
+    INNER JOIN public.book_instance bi ON b.id = bi.book_info
+    WHERE 
+        (p_book_id IS NOT NULL AND b.id = p_book_id) OR
+        (p_book_name IS NOT NULL AND b.book_name ILIKE '%' || p_book_name || '%')
+    ORDER BY 
+        state_priority ASC,
+        bi.id ASC;
+	  
+	END;
+	$$ LANGUAGE plpgsql;
+
+	SELECT * FROM get_book_locations(p_book_id := 1);
+
+	SELECT * FROM get_book_locations(p_book_name := 'Война и мир');
+
+
+--15
+CREATE OR REPLACE VIEW public.available_books_view AS
+SELECT 
+    b.id AS book_id,
+    b.book_name,
+    a.last_name AS author_last_name,
+    a.first_name AS author_first_name,
+    ph.house_name AS publishing_house,
+    b.publication_year,
+    bi.book_state,
+    COUNT(bi.id) AS available_copies_count
+FROM public.book b
+INNER JOIN public.author a ON b.author = a.id
+INNER JOIN public.publishing_house ph ON b.house = ph.id
+INNER JOIN public.book_instance bi ON b.id = bi.book_info
+WHERE bi.book_status = 'available'
+GROUP BY 
+    b.id, b.book_name, a.last_name, a.first_name, 
+    ph.house_name, b.publication_year, bi.book_state
+ORDER BY 
+    b.book_name,
+    CASE 
+        WHEN bi.book_state = 'best' 	THEN 1
+        WHEN bi.book_state = 'good' 	THEN 2
+        WHEN bi.book_state = 'normal' 	THEN 3
+        WHEN bi.book_state = 'old' 		THEN 4
+        ELSE 5
+    END;
+
+SELECT * FROM public.available_books_view;	
+	
+--16
+CREATE OR REPLACE VIEW public.overdue_one_year_books_view AS
+SELECT 
+    r.reader_card,
+    r.last_name AS reader_last_name,
+    r.first_name AS reader_first_name,
+    b.book_name,
+    a.last_name AS author_last_name,
+    a.first_name AS author_first_name,
+    i.issue_datetime,
+    i.expected_return_date,
+    (CURRENT_DATE - i.issue_datetime::date) AS days_since_issue
+FROM public.issuance i
+INNER JOIN public.reader r ON i.reader_card = r.reader_card
+INNER JOIN public.book_instance bi ON i.book_instance_id = bi.id
+INNER JOIN public.book b ON bi.book_info = b.id
+INNER JOIN public.author a ON b.author = a.id
+WHERE i.actual_return_date IS NULL 
+  AND i.issue_datetime < CURRENT_DATE - INTERVAL '2 year'
+ORDER BY i.issue_datetime ASC;
+
+SELECT * FROM public.overdue_one_year_books_view;
